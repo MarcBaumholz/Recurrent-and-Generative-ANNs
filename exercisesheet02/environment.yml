@@ -1,0 +1,17 @@
+name: lecture2
+channels:
+  - defaults
+  - conda-forge
+dependencies:
+  - python=3.10 
+  - pytorch-lightning
+  - mkl
+  - h5py
+  - jsmin
+  - numpy
+  - torchvision
+  - matplotlib
+  - pytorch
+  - pip
+  - pip:
+      - einops
