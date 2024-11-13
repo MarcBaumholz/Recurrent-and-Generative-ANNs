@@ -1,6 +1,6 @@
 {                                                                                                     
   "model_path": "vit",
-  "epochs": 100,
+  "epochs": 1000,
   "num_workers": 4,
   "prefetch_factor": 1,
   "learning_rate": 0.0003, 

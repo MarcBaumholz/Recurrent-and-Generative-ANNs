@@ -32,7 +32,6 @@ class SelfAttentionLayer(nn.Module):
         self.output_linear = nn.Linear(embed_size, embed_size)
     
     def forward(self, x):
-        import torch.nn.functional as F 
         """
         Performs the forward pass of the attention layer.
 
@@ -42,31 +41,40 @@ class SelfAttentionLayer(nn.Module):
         Returns:
             Tensor: Output tensor of shape (batch_size, sequence_length, embed_size).
         """
-        batch_size, seq_length, embed_size = x.size()
         
         # Linear projections of queries, keys, and values
         queries = self.q_linear(x)  # Shape: (batch_size, seq_length, embed_size)
         keys    = self.k_linear(x)  # Shape: (batch_size, seq_length, embed_size)
         values  = self.v_linear(x)  # Shape: (batch_size, seq_length, embed_size)
 
-        # Split the embedding dimension into multiple heads
-        queries = queries.view(batch_size, seq_length, self.num_heads, self.head_dim).transpose(1, 2)  # Shape: (batch_size, num_heads, seq_length, head_dim)
-        keys = keys.view(batch_size, seq_length, self.num_heads, self.head_dim).transpose(1, 2)        # Shape: (batch_size, num_heads, seq_length, head_dim)
-        values = values.view(batch_size, seq_length, self.num_heads, self.head_dim).transpose(1, 2)    # Shape: (batch_size, num_heads, seq_length, head_dim)
+        # Split the embedding dimension into multiple heads and rearrange the tensor
+        # Reshape and transpose to get shape: (batch_size, num_heads, seq_length, head_dim)
+        queries = rearrange(queries, "b s (h d) -> b h s d", h=self.num_heads)
+        keys = rearrange(keys, "b s (h d) -> b h s d", h=self.num_heads)
+        values = rearrange(values, "b s (h d) -> b h s d", h=self.num_heads)
 
         # Compute scaled dot-product attention
-        # Attention scores: (batch_size, num_heads, seq_length, seq_length)
-        scores = torch.matmul(queries, keys.transpose(-2, -1)) / math.sqrt(self.head_dim)
+        # Compute attention scores by taking the dot product between queries and keys
+        # and scaling by the square root of the head dimension
+        # scores shape: (batch_size, num_heads, seq_length, seq_length)
+        scores = torch.matmul(queries, keys.transpose(-1, -2)) / math.sqrt(self.head_dim)
+        
+        # Compute the attention weights using the softmax function
+        attention_weights = torch.softmax(scores, dim=-1)
 
-        # Apply softmax to get attention weights
-        attention_weights = F.softmax(scores, dim=-1)  # Shape: (batch_size, num_heads, seq_length, seq_length)
-
-        # Compute the weighted sum of values
-        weighted_values = torch.matmul(attention_weights, values)  # Shape: (batch_size, num_heads, seq_length, head_dim)
+        # Multiply attention weights with values to get the context vector
+        # attention_weights: (batch_size, num_heads, seq_length, seq_length)
+        # values: (batch_size, num_heads, seq_length, head_dim)
+        # Output: (batch_size, num_heads, seq_length, head_dim)
+        context = torch.matmul(attention_weights, values)
 
         # Concatenate the heads and pass through the final linear layer
-        out = weighted_values.transpose(1, 2).contiguous().view(batch_size, seq_length, embed_size)  # Shape: (batch_size, seq_length, embed_size)
-        out = self.output_linear(out)  # Final linear transformation
+        # First, transpose and reshape to combine the heads
+        # Reshape from (batch_size, num_heads, seq_length, head_dim) to (batch_size, seq_length, embed_size)
+        out = rearrange(context, "b h s d -> b s (h d)")
+
+        # Apply the final linear transformation
+        out = self.output_linear(out)  # Shape: (batch_size, seq_length, embed_size)
 
         return out
 
@@ -145,8 +153,27 @@ class AttentionBlock(nn.Module):
 
         return x
 
+
+class FeedForwardBlock(nn.Module):
+    def __init__(self, embed_size, expansion_factor=4):
+        super(FeedForwardBlock, self).__init__()
+        self.norm1 = nn.LayerNorm(embed_size)
+        self.feed_forward = FeedForwardLayer(embed_size, expansion_factor)
+
+    def forward(self, x):
+        # Apply pre-norm
+        x_norm = self.norm1(x)
+
+        # Pass through the feed-forward layer
+        ff_out = self.feed_forward(x_norm)
+
+        # Residual connection
+        x = x + ff_out
+        return x
+    
+
 class PatchEmbedding(nn.Module):
-    def __init__(self, num_frames, embed_size, patch_size, image_height, image_width, mask_percentage=0.5):
+    def __init__(self, num_frames, embed_size, patch_size, image_height, image_width, mask_percentage=0.5, use_pos_embedding = True):
         """
         Initializes the patch embedding layer.
 
@@ -166,12 +193,16 @@ class PatchEmbedding(nn.Module):
         # compute total number of patches
         num_patches = (image_height // patch_size) * (image_width // patch_size) * num_frames
 
-        # Linear projection for patches
-        self.proj = nn.Linear(patch_size * patch_size, embed_size)
+        # Project patches into embedding dimension (treat each frame seperatly!)
+        self.proj = nn.Sequential(
+            Rearrange('b t (h p1) (w p2) -> (b t) (h w) (p1 p2)', p1=self.patch_size, p2=self.patch_size),
+            nn.Linear(patch_size * patch_size, embed_size),
+            Rearrange('(b f) n e -> b (f n) e', f = num_frames)
+            )
+        # Positional embedding for each patch
+        self.use_pos_embedding = use_pos_embedding
+        self.pos_embedding = nn.Parameter(torch.randn(1, num_patches, embed_size)) if use_pos_embedding else None
 
-        # Positional embeddings for each patch
-        self.position_embeddings = nn.Parameter(torch.randn(1, num_patches, embed_size))
-        
         # Mask percentage for masking patches
         self.mask_percentage = mask_percentage
 
@@ -211,25 +242,19 @@ class PatchEmbedding(nn.Module):
         Returns:
             Tensor: Output tensor of shape (batch_size, num_patches, embed_size).
         """
-        batch_size, num_frames, height, width = x.size()
-
         if self.num_frames > 1:
             return self.predict(x)
-
-        # Reshape and split into patches
-        x = rearrange(x, 'b t (h p1) (w p2) -> (b t) (h w) (p1 p2)', p1=self.patch_size, p2=self.patch_size)
         
-        # Linear projection to embed_size
-        x = self.proj(x)  # Shape: (batch_size * num_frames, num_patches, embed_size)
-
-        # Reshape back to include num_frames
-        x = x.view(batch_size, num_frames * self.num_patches_per_frame, self.embed_size)
-
-        # Add position embeddings
-        x = x + self.position_embeddings[:, :x.size(1), :]
+        # x shape: (batch_size, num_frames, height, width)
+        # After projection: (batch_size, num_patches, embed_size)
+        x = self.proj(x)
 
         # Mask a random number of patches
         x, mask = self.mask_patches(x)
+
+        # Add position embeddings
+        if(self.use_pos_embedding):
+            x = x + self.pos_embedding[:, :x.size(1), :]
 
         return x, mask
 
@@ -243,16 +268,9 @@ class PatchEmbedding(nn.Module):
         Returns:
             Tensor: Output tensor of shape (batch_size, total_patches, embed_size).
         """
-        batch_size, num_frames, height, width = x.size()
 
-        # Reshape and split into patches
-        x = rearrange(x, 'b t (h p1) (w p2) -> (b t) (h w) (p1 p2)', p1=self.patch_size, p2=self.patch_size)
-
-        # Linear projection to embed_size
-        x = self.proj(x)  # Shape: (batch_size * num_frames, num_patches, embed_size)
-
-        # Reshape back to include num_frames
-        x = x.view(batch_size, num_frames * self.num_patches_per_frame, self.embed_size)
+        # Project the input
+        x = self.proj(x)
 
         # Calculate indices to mask out the last frame's patches
         total_patches = self.num_patches_per_frame * self.num_frames
@@ -264,9 +282,10 @@ class PatchEmbedding(nn.Module):
         x = x * mask
 
         # Add position embeddings
-        x = x + self.position_embeddings[:, :x.size(1), :]
+        if(self.use_pos_embedding):
+            x = x + self.pos_embedding[:, :x.size(1), :]
 
-        return x, mask  
+        return x, mask
 
 class PrintShape(nn.Module):
     def __init__(self):

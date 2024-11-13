@@ -1,15 +1,12 @@
+import einops
 import torch
-import torch.nn as nn
 
 
-class RNNCell(nn.Module):
+class RNNCell(torch.nn.Module):
     def __init__(self, input_size, hidden_size):
         super().__init__()
-        self.input_size = input_size
-        self.hidden_size = hidden_size
-        self.i2h = nn.Linear(input_size, hidden_size)
-        self.h2h = nn.Linear(hidden_size, hidden_size)
-        self.activation = nn.Tanh()
+        self.input_to_hidden = torch.nn.Linear(input_size, hidden_size, bias=True)
+        self.hidden_to_hidden = torch.nn.Linear(hidden_size, hidden_size, bias=True)
 
     def forward(self, x, h):
         """
@@ -22,17 +19,16 @@ class RNNCell(nn.Module):
         Returns:
             Tensor: Hidden state of shape (batch_size, hidden_size).
         """
-        # Compute new hidden state
-        h_new = self.activation(self.i2h(x) + self.h2h(h))
-        return h_new
+        return torch.tanh(self.input_to_hidden(x) + self.hidden_to_hidden(h))
 
 
-class RNN(nn.Module):
+class RNN(torch.nn.Module):
     def __init__(self, input_size, hidden_size, output_size):
         super().__init__()
+        #self.rnn_cell = torch.nn.RNNCell(input_size, hidden_size)
         self.hidden_size = hidden_size
         self.rnn_cell = RNNCell(input_size, hidden_size)
-        self.fc = nn.Linear(hidden_size, output_size)
+        self.output_layer = torch.nn.Linear(hidden_size, output_size)
 
     def forward(self, x):
         """
@@ -45,23 +41,21 @@ class RNN(nn.Module):
             Tensor: Output of shape (batch_size, output_size).
         """
         batch_size, sequence_length, _ = x.size()
+
         h = torch.zeros(batch_size, self.hidden_size, device=x.device)
 
+        # Process each time step
         for t in range(sequence_length):
-            h = self.rnn_cell(x[:, t, :], h)  # Update hidden state for each time step
+            h = self.rnn_cell(x[:, t, :], h)
 
-        # Pass the final hidden state to the output layer
-        output = self.fc(h)
-        return output
-
-
-
+        return self.output_layer(h)
+    
 class LSTMCell(torch.nn.Module):
     def __init__(self, input_size, hidden_size):
         super().__init__()
         self.hidden_size = hidden_size
-        self.i2h = nn.Linear(input_size, hidden_size * 4)
-        self.h2h = nn.Linear(hidden_size, hidden_size * 4)
+        # Single linear layer to compute all gates simultaneously
+        self.linear = torch.nn.Linear(input_size + hidden_size, 4 * hidden_size)
 
     def forward(self, x, h):
         """
@@ -74,26 +68,36 @@ class LSTMCell(torch.nn.Module):
         Returns:
             Tuple(Tensor): Hidden and cell state of shape (batch_size, hidden_size).
         """
-        h_state, c = h
-        gates = self.i2h(x) + self.h2h(h_state)
-        i, f, o, g = gates.chunk(4, dim=1)  # Split the gates
+        h_prev, c_prev = h
 
-        i = torch.sigmoid(i)  # Input gate
-        f = torch.sigmoid(f)  # Forget gate
-        o = torch.sigmoid(o)  # Output gate
-        g = torch.tanh(g)     # Cell gate
+        # Concatenate input and previous hidden state
+        combined = torch.cat((x, h_prev), dim=1)
 
-        c = f * c + i * g  # New cell state
-        h_state = o * torch.tanh(c)  # New hidden state
-        return h_state, c
+        # Compute all gate activations in one go
+        gates = self.linear(combined)
 
+        # Split the gates into their respective parts
+        i_t, f_t, g_t, o_t = torch.chunk(gates, 4, dim=1)
+
+        # Apply activations
+        i_t = torch.sigmoid(i_t) # Input
+        f_t = torch.sigmoid(f_t) # Forget
+        g_t = torch.tanh(g_t) # Cell
+        o_t = torch.sigmoid(o_t) # Output
+        
+        # Update cell state and hidden state
+        c_next = f_t * c_prev + i_t * g_t
+        h_next = o_t * torch.tanh(c_next)
+
+        return h_next, c_next
 
 class LSTM(torch.nn.Module):
     def __init__(self, input_size, hidden_size, output_size):
         super().__init__()
         self.hidden_size = hidden_size
+        #self.lstm_cell = torch.nn.LSTMCell(input_size, hidden_size)
         self.lstm_cell = LSTMCell(input_size, hidden_size)
-        self.fc = nn.Linear(hidden_size, output_size)
+        self.output_layer = torch.nn.Linear(hidden_size, output_size)
 
     def forward(self, x):
         """
@@ -106,23 +110,28 @@ class LSTM(torch.nn.Module):
             Tensor: Output of shape (batch_size, output_size).
         """
         batch_size, sequence_length, _ = x.size()
+        
+        # Initialize hidden and cell states to zeros
         h = torch.zeros(batch_size, self.hidden_size, device=x.device)
         c = torch.zeros(batch_size, self.hidden_size, device=x.device)
 
+        # Process each time step in the sequence
         for t in range(sequence_length):
             h, c = self.lstm_cell(x[:, t, :], (h, c))
 
-        # Pass the final hidden state to the output layer
-        output = self.fc(h)
-        return output
+        return self.output_layer(h)
 
 
 class Conv1d(torch.nn.Module):
-    def __init__(self, input_size, hidden_size, kernel_size, stride=1):
+    def __init__(self, input_size, hidden_size, kernel_size, stride):
         super().__init__()
+        self.input_size = input_size
+        self.hidden_size = hidden_size
         self.kernel_size = kernel_size
         self.stride = stride
-        self.conv = nn.Linear(input_size * kernel_size, hidden_size)
+
+        # Initialize the convolution weights and biases
+        self.conv = torch.nn.Linear(input_size * kernel_size, hidden_size)
 
     def forward(self, x):
         """
@@ -135,27 +144,34 @@ class Conv1d(torch.nn.Module):
             Tensor: Output of shape (batch_size, hidden_size, sequence_length).
         """
         batch_size, input_size, sequence_length = x.size()
-        padding = (self.kernel_size - 1)  # Equivalent to "same" padding
-        x = nn.functional.pad(x, (padding, 0))
 
-        outputs = []
-        for i in range(0, sequence_length, self.stride):
-            if i + self.kernel_size > x.size(2):
-                break
-            x_chunk = x[:, :, i:i+self.kernel_size]
-            x_chunk = x_chunk.contiguous().view(batch_size, -1)
-            outputs.append(self.conv(x_chunk))
+        # Apply padding
+        padding = (self.kernel_size - 1)
+        x = torch.nn.functional.pad(x, (padding, 0))
 
-        return torch.stack(outputs, dim=2)  # Shape: (batch_size, hidden_size, new_sequence_length)
+        # Extract patches, new shape: (batch_size, sequence_length, input_size * kernel_size)
+        x = x.unfold(dimension=2, size=self.kernel_size, step=self.stride)
 
+        # Reshape to (batch_size, sequence_length, input_size * kernel_size)
+        x = x.permute(0, 2, 1, 3).reshape(batch_size, -1, input_size * self.kernel_size)
 
+        # Apply linear weights and biases to each patch
+        output = self.conv(x)
+
+        # Transpose to get output in shape (batch_size, hidden_size, sequence_length)
+        return output.transpose(1, 2)
 
 class TCN(torch.nn.Module):
     def __init__(self, input_size, hidden_size, output_size):
         super().__init__()
-        self.conv1 = Conv1d(input_size, hidden_size, 3, 1)
-        self.conv2 = Conv1d(hidden_size, hidden_size, 3, 1)
-        self.fc = nn.Linear(hidden_size, output_size)
+        self.num_layers = 3
+        self.convs = torch.nn.ModuleList()
+
+        for i in range(self.num_layers):
+            #self.convs.append(torch.nn.Conv1d(input_size if i == 0 else hidden_size, hidden_size, kernel_size=3, stride=3))
+            self.convs.append(Conv1d(input_size if i == 0 else hidden_size, hidden_size, kernel_size=3, stride=3))
+
+        self.output_layer = torch.nn.Linear(hidden_size, output_size)
 
     def forward(self, x):
         """
@@ -167,14 +183,12 @@ class TCN(torch.nn.Module):
         Returns:
             Tensor: Output of shape (batch_size, output_size).
         """
-        # Transpose x to (batch_size, input_size, sequence_length) for convolution
+        # Reorder dimensions: (batch, channels, sequence)
         x = x.transpose(1, 2)
-        x = self.conv1(x)
-        x = nn.functional.relu(x)
-        x = self.conv2(x)
-        x = nn.functional.relu(x)
-
-        # Take the last time step output and pass through the fully connected layer
+        for conv in self.convs:
+            x = conv(x)
+            x = torch.relu(x)
+        # Take the last output in the sequence
         x = x[:, :, -1]
-        output = self.fc(x)
-        return output
+
+        return self.output_layer(x)

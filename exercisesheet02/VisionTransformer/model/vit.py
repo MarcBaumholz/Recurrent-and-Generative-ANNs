@@ -2,7 +2,7 @@ import torch as th
 from torch import nn
 import torch.nn.functional as F
 from torch.autograd import Function
-from nn.attention import AttentionBlock, PatchEmbedding, ReversePatchEmbedding
+from nn.attention import AttentionBlock, PatchEmbedding, ReversePatchEmbedding, FeedForwardBlock
 from utils.loss import MaskedL1SSIMLoss as L1SSIMLoss
 import numpy as np
 from einops import rearrange, repeat, reduce
@@ -17,10 +17,11 @@ class VisionTransformer(nn.Module):
 
         self.loss = L1SSIMLoss()
 
-        self.embedding = PatchEmbedding(cfg.num_frames, cfg.channels, patch_size=cfg.patch_size, image_height=cfg.image_height, image_width=cfg.image_width)
+        self.embedding = PatchEmbedding(cfg.num_frames, cfg.channels, patch_size=cfg.patch_size, image_height=cfg.image_height, image_width=cfg.image_width, use_pos_embedding=True)
         
         self.layers = nn.Sequential(
             *[AttentionBlock(cfg.channels, cfg.num_heads) for _ in range(cfg.layers)],
+            #*[FeedForwardBlock(cfg.channels) for _ in range(cfg.layers)],
         )
         
         self.reverse_embedding = ReversePatchEmbedding(cfg.channels, cfg.num_frames, patch_size=cfg.patch_size, image_height=cfg.image_height, image_width=cfg.image_width)
