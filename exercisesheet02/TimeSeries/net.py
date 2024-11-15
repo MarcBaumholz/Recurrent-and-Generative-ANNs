@@ -123,15 +123,16 @@ class LSTM(torch.nn.Module):
 
 
 class Conv1d(torch.nn.Module):
-    def __init__(self, input_size, hidden_size, kernel_size, stride):
+    def __init__(self, input_size, hidden_size, kernel_size, stride, dilation):
         super().__init__()
         self.input_size = input_size
         self.hidden_size = hidden_size
         self.kernel_size = kernel_size
         self.stride = stride
+        self.dilation = dilation
 
         # Initialize the convolution weights and biases
-        self.conv = torch.nn.Linear(input_size * kernel_size, hidden_size)
+        self.linear = torch.nn.Linear(input_size * kernel_size, hidden_size)
 
     def forward(self, x):
         """
@@ -143,34 +144,41 @@ class Conv1d(torch.nn.Module):
         Returns:
             Tensor: Output of shape (batch_size, hidden_size, sequence_length).
         """
-        batch_size, input_size, sequence_length = x.size()
+        batch_size, input_size, sequence_length = x.shape
 
         # Apply padding
-        padding = (self.kernel_size - 1)
-        x = torch.nn.functional.pad(x, (padding, 0))
+        effective_kernel_size = (self.kernel_size - 1) * self.dilation + 1
+        if(input_size % effective_kernel_size != 0):
+            padding = effective_kernel_size -1
+            x = torch.nn.functional.pad(x, (0, padding))
 
-        # Extract patches, new shape: (batch_size, sequence_length, input_size * kernel_size)
-        x = x.unfold(dimension=2, size=self.kernel_size, step=self.stride)
+        # Unfold input
+        x_unfolded = x.unfold(dimension=2, size=self.kernel_size, step=self.stride)
 
-        # Reshape to (batch_size, sequence_length, input_size * kernel_size)
-        x = x.permute(0, 2, 1, 3).reshape(batch_size, -1, input_size * self.kernel_size)
+        # Select the appropriate elements in the output sequence with dilation
+        x_unfolded = x_unfolded[:, :, ::self.dilation,:]  
+
+        # Reshape from [batch_size, input_size, output_length, kernel_size] to [batch_size * output_length, input_size * kernel_size]
+        x_unfolded = einops.rearrange(x_unfolded, "b i s k -> (b s) (i k)")
 
         # Apply linear weights and biases to each patch
-        output = self.conv(x)
+        output = self.linear(x_unfolded)
 
-        # Transpose to get output in shape (batch_size, hidden_size, sequence_length)
-        return output.transpose(1, 2)
+        # Rearrange to (batch_size, hidden_size, sequence_length)
+        return einops.rearrange(output, "(b s) h -> b h s", b=batch_size)
 
 class TCN(torch.nn.Module):
     def __init__(self, input_size, hidden_size, output_size):
         super().__init__()
-        self.num_layers = 3
+        dilation_factor = 1
+        self.num_layers = 4 if dilation_factor == 1 else 3
         self.convs = torch.nn.ModuleList()
 
         for i in range(self.num_layers):
-            #self.convs.append(torch.nn.Conv1d(input_size if i == 0 else hidden_size, hidden_size, kernel_size=3, stride=3))
-            self.convs.append(Conv1d(input_size if i == 0 else hidden_size, hidden_size, kernel_size=3, stride=3))
-
+            dilation = dilation_factor ** i
+            #self.convs.append(torch.nn.Conv1d(input_size if i == 0 else hidden_size, hidden_size, kernel_size=3, stride=3, dilation=dilation))
+            self.convs.append(Conv1d(input_size if i == 0 else hidden_size, hidden_size, kernel_size=3, stride=3, dilation=dilation))
+          
         self.output_layer = torch.nn.Linear(hidden_size, output_size)
 
     def forward(self, x):
@@ -187,8 +195,9 @@ class TCN(torch.nn.Module):
         x = x.transpose(1, 2)
         for conv in self.convs:
             x = conv(x)
-            x = torch.relu(x)
-        # Take the last output in the sequence
+            #x = torch.relu(x)
+            #print(x.shape)
+        # Take the last output in the sequence (should only have one element if num_layers is correct)
         x = x[:, :, -1]
 
         return self.output_layer(x)
