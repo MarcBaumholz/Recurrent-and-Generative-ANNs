@@ -1,7 +1,7 @@
 {                                                                                                     
   "model_path": "vit",
-  "epochs": 100,
-  "num_workers": 4,
+  "epochs": 2,
+  "num_workers": 1,
   "prefetch_factor": 1,
   "learning_rate": 0.0003, 
   "weight_decay": 0.0003,
@@ -10,7 +10,7 @@
   },
   "model": {
       "data": "hdf5",
-      "batch_size": 32,
+      "batch_size": 64,
       "mixed_precision": false,
       "image_height": 144,
       "image_width": 160,
