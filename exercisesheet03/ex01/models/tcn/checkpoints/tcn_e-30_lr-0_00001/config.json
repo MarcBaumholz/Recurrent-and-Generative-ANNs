@@ -1,0 +1,31 @@
+{
+ "general": {
+  "device": "cuda"
+ },
+ "training": {
+  "save_model": true,
+  "epochs": 30,
+  "learning_rate": 1e-05
+ },
+ "testing": {
+  "teacher_forcing_steps": 30,
+  "closed_loop_steps": 100
+ },
+ "dataset": {
+  "name": "chapter1"
+ },
+ "model": {
+  "name": "tcn_e-30_lr-0_00001",
+  "channels": [
+   45,
+   45
+  ],
+  "dimensions": 1,
+  "kernel_size": 3
+ },
+ "results": {
+  "current_epoch": 30,
+  "current_training_error": 4.977748085041435,
+  "lowest_train_error": 4.977748085041435
+ }
+}

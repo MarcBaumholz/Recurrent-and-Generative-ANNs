@@ -1,0 +1,35 @@
+{
+ "general": {
+  "device": "cuda"
+ },
+ "training": {
+  "save_model": true,
+  "epochs": 300,
+  "learning_rate": 0.0001
+ },
+ "testing": {
+  "teacher_forcing_steps": 30,
+  "closed_loop_steps": 100
+ },
+ "dataset": {
+  "name": "chapter1"
+ },
+ "model": {
+  "name": "tcn6x3_e-300_lr-0_0001",
+  "channels": [
+   45,
+   45,
+   45,
+   45,
+   45,
+   45
+  ],
+  "dimensions": 1,
+  "kernel_size": 3
+ },
+ "results": {
+  "current_epoch": 17,
+  "current_training_error": 3.812127967270053,
+  "lowest_train_error": 3.812127967270053
+ }
+}

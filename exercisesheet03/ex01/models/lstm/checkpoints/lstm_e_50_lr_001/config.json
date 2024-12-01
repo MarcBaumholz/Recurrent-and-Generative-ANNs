@@ -1,0 +1,28 @@
+{
+ "general": {
+  "device": "cuda"
+ },
+ "training": {
+  "save_model": true,
+  "epochs": 50,
+  "learning_rate": 0.01
+ },
+ "testing": {
+  "teacher_forcing_steps": 30,
+  "closed_loop_steps": 100
+ },
+ "dataset": {
+  "name": "chapter1"
+ },
+ "model": {
+  "name": "lstm_e_50_lr_001",
+  "d_one_hot": 45,
+  "d_lstm": 128,
+  "num_lstm_layers": 2
+ },
+ "results": {
+  "current_epoch": 48,
+  "current_training_error": 1.1812403513004586,
+  "lowest_train_error": 1.1812403513004586
+ }
+}

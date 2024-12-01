@@ -1,0 +1,29 @@
+{
+ "general": {
+  "device": "cuda"
+ },
+ "training": {
+  "save_model": true,
+  "epochs": 300,
+  "learning_rate": 0.001
+ },
+ "testing": {
+  "teacher_forcing_steps": 30,
+  "closed_loop_steps": 100
+ },
+ "dataset": {
+  "name": "chapter1"
+ },
+ "model": {
+  "name": "transformer_e-300_lr-0_001",
+  "n_heads": 8,
+  "d_one_hot": 45,
+  "d_model": 256,
+  "linear_layer_size": 512
+ },
+ "results": {
+  "current_epoch": 298,
+  "current_training_error": 0.29711367349539486,
+  "lowest_train_error": 0.29711367349539486
+ }
+}

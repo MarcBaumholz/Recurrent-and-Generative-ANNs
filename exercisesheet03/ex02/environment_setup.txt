@@ -1,0 +1,2 @@
+conda create -n ex03 python=3.11 -y && conda activate ex03
+pip install numpy==1.23 torch torchvision tqdm
