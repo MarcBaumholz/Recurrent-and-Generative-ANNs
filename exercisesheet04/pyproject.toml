@@ -1,0 +1,33 @@
+[project]
+name = "ex04"
+version = "0.0.1"
+authors = [
+  { name="Matthias Karlbauer", email="matthias.karlbauer@uni-tuebingen.de" },
+  { name="Jan Prosi", email="jan-gerhard.prosi@uni-tuebingen.de" }
+]
+description = "Machine learning package for LAFI project."
+readme = "README.md"
+requires-python = ">=3.11"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+]
+dependencies = [
+  "einops",
+  "hydra-core",
+  "numpy==1.26",
+  "tensorboard",
+	"torch",
+  "torchvision",
+  "tqdm",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ex04"]
+
+[project.urls]
+Homepage = "https://github.com/"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

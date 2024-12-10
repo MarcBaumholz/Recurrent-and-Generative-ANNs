@@ -1,0 +1,4 @@
+_target_: torch.optim.Adam
+lr: 0.001 # TODO: Adjust this
+weight_decay: 0.1
+betas: [0.9, 0.999]

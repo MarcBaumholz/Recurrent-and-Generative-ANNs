@@ -1,0 +1,8 @@
+_target_: data.pytorch_datasets.WaveDataset
+data_path: data/numpy
+dataset_name: 32x32_slow #32x32_slow_len200_2000_samples #32x32_slow
+num_workers: 0
+drop_last: false
+size: 32
+context_size: 4
+use_x_share_of_samples: 1.0

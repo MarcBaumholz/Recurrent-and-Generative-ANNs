@@ -1,0 +1,9 @@
+_target_: models.ConvLSTM
+name: test
+batch_size: ${training.batch_size}
+input_size: 1
+hidden_size: 4
+height: ${data.size}
+width: ${data.size}
+device: ${device}
+bias: true

@@ -1,0 +1,21 @@
+# @package _global_
+
+# Override entire configuration yaml files
+defaults:
+  - override /data: wave_unet
+  - override /model: unet
+  #- override /training/scheduler: cosine
+
+# Override individual fields in each configuration file
+device: cuda:0
+limit_threads: 0
+
+model:
+  name: unet
+
+training:
+  epochs: 50
+  batch_size: 16
+
+validation:
+  batch_size: 16

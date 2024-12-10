@@ -1,0 +1,3 @@
+- model.name=my_clstm_model
+- data.dataset_name=32x32_slow
+- device=cpu
