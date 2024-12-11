@@ -1,0 +1,52 @@
+limit_threads: 1
+device: cuda:0
+verbose: true
+seed: 1234
+training:
+  criterion:
+    _target_: torch.nn.MSELoss
+  optimizer:
+    _target_: torch.optim.Adam
+    lr: 0.001
+    weight_decay: 0.1
+    betas:
+    - 0.9
+    - 0.999
+  scheduler:
+    _target_: torch.optim.lr_scheduler.ConstantLR
+    factor: 1.0
+    last_epoch: -1
+  epochs: 20
+  clip_gradients: false
+  batch_size: 8
+  teacher_forcing_steps: 80
+  noise: 0.0
+  save_model: true
+  continue_training: false
+validation:
+  batch_size: 8
+  teacher_forcing_steps: ${training.teacher_forcing_steps}
+  noise: 0.0
+testing:
+  batch_size: 2056
+  teacher_forcing_steps: ${training.teacher_forcing_steps}
+  noise: 0.0
+data:
+  _target_: data.pytorch_datasets.WaveDataset
+  data_path: data/numpy
+  dataset_name: 32x32_fast
+  num_workers: 0
+  drop_last: false
+  size: 32
+  context_size: 4
+  use_x_share_of_samples: 1.0
+model:
+  _target_: models.ConvLSTM
+  name: conv_lstm_fast
+  batch_size: ${training.batch_size}
+  input_size: 1
+  hidden_size: 4
+  height: ${data.size}
+  width: ${data.size}
+  device: ${device}
+  bias: true

@@ -1,0 +1,3 @@
+- model.name=conv_lstm_slow
+- data.dataset_name=32x32_slow
+- device=cuda:0

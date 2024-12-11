@@ -15,7 +15,7 @@ model:
 
 training:
   epochs: 50
-  batch_size: 16
+  batch_size: 32
 
 validation:
-  batch_size: 16
+  batch_size: 32

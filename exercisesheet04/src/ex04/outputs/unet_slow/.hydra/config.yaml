@@ -1,0 +1,66 @@
+limit_threads: 0
+device: cuda:0
+verbose: true
+seed: 1234
+training:
+  criterion:
+    _target_: torch.nn.MSELoss
+  optimizer:
+    _target_: torch.optim.Adam
+    lr: 0.001
+    weight_decay: 0.1
+    betas:
+    - 0.9
+    - 0.999
+  scheduler:
+    _target_: torch.optim.lr_scheduler.ConstantLR
+    factor: 1.0
+    last_epoch: -1
+  epochs: 50
+  clip_gradients: false
+  batch_size: 32
+  teacher_forcing_steps: 80
+  noise: 0.0
+  save_model: true
+  continue_training: false
+validation:
+  batch_size: 32
+  teacher_forcing_steps: ${training.teacher_forcing_steps}
+  noise: 0.0
+testing:
+  batch_size: 2056
+  teacher_forcing_steps: ${training.teacher_forcing_steps}
+  noise: 0.0
+data:
+  _target_: data.pytorch_datasets.WaveUnetDataset
+  data_path: data/numpy
+  dataset_name: 32x32_slow
+  num_workers: 0
+  drop_last: false
+  size: 32
+  context_size: 2
+  cut_off_first_n_frames: 5
+  cut_off_last_n_frames: 5
+  use_x_share_of_samples: 0.1
+  max_rollout_steps: 1
+model:
+  _target_: models.ConvNeXtUNet
+  name: unet_slow
+  c_in: 2
+  c_out: 1
+  c_list:
+  - 4
+  - 32
+  - 64
+  - 128
+  - 256
+  spatial_factor_list:
+  - 2
+  - 2
+  - 2
+  - 2
+  num_block_list:
+  - 2
+  - 2
+  - 2
+  - 2

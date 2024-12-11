@@ -1,8 +1,7 @@
-#type: UNet
-_target_: models.ConvNeXtUNet #models.UNet
-name: test_01
-c_in: ${data.context_size} # input channels == number of input frames
-c_out: 1 # output channels == number of output frames
-c_list: [1,1] # TODO: Adjust this
-spatial_factor_list: [1] # TODO: Adjust this
-num_block_list: [1] # TODO: Adjust this
+_target_: models.ConvNeXtUNet
+name: model1
+c_in: 2
+c_out: 1
+c_list: [4, 32, 64, 128, 256]
+spatial_factor_list: [2, 2, 2, 2]
+num_block_list: [2, 2, 2, 2]
