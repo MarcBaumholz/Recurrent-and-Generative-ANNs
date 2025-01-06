@@ -145,15 +145,18 @@ class DownScale(nn.Module):
     """
     def __init__(self, c_in: int, c_out: int, spatial_factor: int):
         super().__init__()
-        self.conv = nn.Conv2d(c_in, c_out, kernel_size=3, stride=spatial_factor, padding=1)
-        self.norm = LayerNormChannelOnly(c_out)  # Use LayerNorm for stability
-        self.relu = nn.ReLU()
+        # TODO: Implement ==> DONE
+        self.downsample = nn.Sequential(
+            # Maxpool to reduce spatial dimension
+            nn.MaxPool2d(kernel_size=spatial_factor, stride=spatial_factor),
+            # 1x1 conv to adjust channel dimensions
+            nn.Conv2d(c_in, c_out, kernel_size=1, padding=0)
+        )
 
-    def forward(self, x: torch.Tensor):
-        x = self.conv(x)
-        x = self.norm(x)
-        x = self.relu(x)
-        return x
+    def forward(self,x):
+        # TODO: Implement ==> DONE
+        return self.downsample(x)
+
 
 
 class UpScale(nn.Module):
@@ -162,15 +165,13 @@ class UpScale(nn.Module):
     """
     def __init__(self, c_in: int, c_out: int, spatial_factor: int):
         super().__init__()
-        self.upsample = nn.ConvTranspose2d(c_in, c_out, kernel_size=spatial_factor, stride=spatial_factor, padding=0)
-        self.norm = LayerNormChannelOnly(c_out)
-        self.relu = nn.ReLU()
+        # TODO: Implement ==> DONE
+        # ConvTranspose2d ~ up-conv
+        self.upsample = nn.ConvTranspose2d(c_in, c_out, kernel_size=spatial_factor, stride=spatial_factor)
 
-    def forward(self, x: torch.Tensor):
-        x = self.upsample(x)
-        x = self.norm(x)
-        x = self.relu(x)
-        return x
+    def forward(self,x):
+        # TODO: Implement ==> DONE
+        return self.upsample(x)
 
 
 
@@ -180,13 +181,18 @@ class EncoderModule(nn.Module):
     """
     def __init__(self, c_in: int, c_out: int, spatial_factor: int, num_blocks: int):
         super().__init__()
-        self.blocks = nn.Sequential(*[ConvNext(c_out) for _ in range(num_blocks)])
+        # TODO: Implement ==> DONE
+        # n blocks of ConvNext which keep channel dim
+        self.blocks = nn.Sequential(*[ConvNext(c_in) for _ in range(num_blocks)])
+        # downscale to new channel dim
         self.downscale = DownScale(c_in, c_out, spatial_factor)
 
-    def forward(self, x: torch.Tensor):
-        x = self.downscale(x)
+    def forward(self,x):
+        # TODO: Implement 
         x = self.blocks(x)
-        return x
+        skip = x # Init skip connection
+        x = self.downscale(x)
+        return x, skip
 
 
 class DecoderModule(nn.Module):
@@ -197,12 +203,17 @@ class DecoderModule(nn.Module):
     """
     def __init__(self, c_in: int, c_out: int, spatial_factor: int, num_blocks: int):
         super().__init__()
-        self.upsample = UpScale(c_in, c_out, spatial_factor)
+        # TODO: Implement ==> DONE
+        # upsample to new channel dim
+        self.upscale = UpScale(c_in, c_out, spatial_factor)
+        # n blocks of ConvNext which keep channel dim
         self.blocks = nn.Sequential(*[ConvNext(c_out) for _ in range(num_blocks)])
 
-    def forward(self, x: torch.Tensor, skip_connection: torch.Tensor):
-        x = self.upsample(x)
-        x = x + skip_connection  # Add skip connection
+
+    def forward(self,x,skip):
+        # TODO: Implement 
+        x = self.upscale(x)
+        x = x + skip  # Add skip connection
         x = self.blocks(x)
         return x
 
@@ -213,17 +224,22 @@ class Encoder(nn.Module):
     """
     def __init__(self, c_list: list[int], spatial_factor_list: list[int], num_blocks_list: list[int]):
         super().__init__()
+        # TODO: Implement ==> DONE
+        #  Tip: Try a skip connection before down scaling to boost model performance ==> DONE in EncoderModule forward
+        # Application of n_layers EncoderModules where n_layers is given by len(spatial_factor_list)=len(num_blocks_list)=len(c_list)-1
+        n_layers = len(spatial_factor_list)
         self.layers = nn.ModuleList([
-            EncoderModule(c_list[i], c_list[i + 1], spatial_factor_list[i], num_blocks_list[i])
-            for i in range(len(spatial_factor_list))
+            EncoderModule(c_list[i], c_list[i+1], spatial_factor_list[i], num_blocks_list[i])
+            for i in range(n_layers)
         ])
-
-    def forward(self, x: torch.Tensor):
-        skip_connections = []
+    
+    def forward(self,x):
+        # TODO: Implement 
+        skip_list = []
         for layer in self.layers:
-            x = layer(x)
-            skip_connections.append(x)  # Save skip connections
-        return skip_connections
+            x, skip = layer(x)
+            skip_list.append(skip)
+        return skip_list
 
 
 class Decoder(nn.Module):
@@ -233,16 +249,21 @@ class Decoder(nn.Module):
     """
     def __init__(self, c_list: list[int], spatial_factor_list: list[int], num_blocks_list: list[int]):
         super().__init__()
+        # TODO: Implement ==> DONE
+        # Application of n_layers DecoderModules
+        n_layers = len(spatial_factor_list) - 1 # botom of U = encoder => n_decoder_modules = n_encoder_modules-1
+        i_max = n_layers-1
+
         self.layers = nn.ModuleList([
-            DecoderModule(c_list[i + 1], c_list[i], spatial_factor_list[i], num_blocks_list[i])
-            for i in range(len(spatial_factor_list))
+            DecoderModule(c_list[i_max+1-i], c_list[i_max-i], spatial_factor_list[i_max-i], num_blocks_list[i_max-i])
+            for i in range(n_layers)
         ])
 
-    def forward(self, skip_connections: list):
-        x = skip_connections.pop()  # Start with the last encoder output
-        for layer in self.layers:
-            skip_connection = skip_connections.pop()
-            x = layer(x, skip_connection)
+    def forward(self, skip_list: list):
+        # TODO: Implement ==> DONE
+        x = skip_list[-1]
+        for i, layer in enumerate(self.layers):
+            x = layer(x, skip_list[-(i+2)])  # Match the skip connections
         return x
 
 
@@ -282,15 +303,20 @@ class ConvNeXtUNet(nn.Module):
     ):
         super().__init__()
         self.c_in = c_in
+        print(len(c_list))
+        print(len(spatial_factor_list))
+        print(len(num_block_list))
         if not len(c_list) - 1 == len(spatial_factor_list) == len(num_block_list):
             raise ValueError(
                 'The length of (c_list-1) and length of spatial_factor_list and num_block_list must be equal as they '
                 'correspond to the number of downscalings in the network.'
             )
+
         self.upscale_input_channels = nn.Conv2d(c_in, c_list[0], kernel_size=1)
         self.encoder = Encoder(c_list, spatial_factor_list, num_block_list)
         self.decoder = Decoder(c_list, spatial_factor_list, num_block_list)
         self.downscale = nn.Conv2d(c_list[0], c_out, kernel_size=1)
+
 
 
     def forward_one_step(self, x: torch.Tensor):
@@ -316,10 +342,11 @@ class ConvNeXtUNet(nn.Module):
         '''
         args:
             x: Input tensor
-            rollout_steps: Number of roll-outs in closed loop during training. 1 is no roll out
+            rollout_stepys: Number of roll-outs in closed loop during training. 1 is no roll out
         '''
         
         # TODO: possibly change rollout steps here
+        rollout_steps = 1 #ADDED -> For closed loop, add kwargs["inference_steps"] manually
 
         if "inference_steps" in list(kwargs.keys()):
             rollout_steps = kwargs["inference_steps"]

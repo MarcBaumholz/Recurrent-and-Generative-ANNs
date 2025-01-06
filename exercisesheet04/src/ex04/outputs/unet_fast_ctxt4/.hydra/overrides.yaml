@@ -1,0 +1,4 @@
+- +experiment=unet
+- model.name=unet_fast_ctxt4
+- data.dataset_name=32x32_fast
+- device=cuda:0

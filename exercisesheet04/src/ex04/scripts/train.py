@@ -4,6 +4,7 @@ import os
 import sys
 import time
 import threading
+from torchsummary import summary
 
 import hydra
 import numpy as np
@@ -51,12 +52,39 @@ def run_training(cfg):
         num_workers=cfg.data.num_workers
     )
 
+
     # Set up model
     if cfg.verbose: print("\nInitialize model")
     model = hydra.utils.instantiate(config=cfg.model).to(device=device)
+    def custom_model_summary(model):
+        print(f"{'Layer':<40} {'Output Shape':<30} {'Param #':<20}")
+        print("=" * 90)
+        total_params = 0
+        for name, param in model.named_parameters():
+            if param.requires_grad:
+                num_params = param.numel()
+                total_params += num_params
+                print(f"{name:<40} {str(tuple(param.shape)):<30} {num_params:<20}")
+        print("=" * 90)
+        print(f"Total trainable parameters: {total_params}")
+
+    # Display model summary
     if cfg.verbose:
         trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
         print(f"\tModel {cfg.model.name} has {trainable_params} trainable parameters")
+        print("\tModel Summary:")
+
+        try:
+            # Use sub-module summaries or a custom summary
+            custom_model_summary(model)
+        except Exception as e:
+            print("\tUnable to generate model summary:", e)
+
+
+
+
+
+
 
     # Initialize training modules
     criterion = hydra.utils.instantiate(config=cfg.training.criterion)

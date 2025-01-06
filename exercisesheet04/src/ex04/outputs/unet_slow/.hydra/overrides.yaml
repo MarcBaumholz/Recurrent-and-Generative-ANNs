@@ -1,0 +1,5 @@
+- +experiment=unet
+- model.name=unet_slow
+- data.dataset_name=32x32_slow
+- data.context_size=2
+- device=cuda:0
