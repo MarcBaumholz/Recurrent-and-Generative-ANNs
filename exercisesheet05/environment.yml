@@ -1,0 +1,23 @@
+name: lecture5
+channels:
+  - pytorch
+  - nvidia
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.10
+  - pytorch
+  - torchvision
+  - torchaudio
+  - pytorch-cuda=11.8
+  - pytorch-lightning
+  - mkl
+  - h5py
+  - jsmin
+  - numpy
+  - matplotlib
+  - scikit-learn
+  - pip
+  - pip:
+      - einops
+

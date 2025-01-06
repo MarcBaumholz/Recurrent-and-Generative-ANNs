@@ -1,0 +1,22 @@
+{                                                                                                     
+  "model_path": "ffhq-diffusion",
+  "epochs": 1000000,
+  "num_workers": 4,
+  "prefetch_factor": 1,
+  "learning_rate": 0.0001, 
+  "weight_decay": 0.0001,
+  "data": {
+      "data_dir": "./data/FFHQ"
+  },
+  "model": {
+      "data": "ffhq",
+      "shallow": true,
+      "batch_size": 32,
+      "mixed_precision": false,
+      "latent_size": 8,
+      "image_height": 128,
+      "image_width": 128,
+      "num_timesteps": 4000,
+      "gradient_accumulation_steps": 1
+  }
+}                          
