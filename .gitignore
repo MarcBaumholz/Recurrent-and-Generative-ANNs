@@ -54,6 +54,8 @@ cover/
 # Translations
 *.mo
 *.pot
+*.ckpt
+*.ipynb_checkpoints
 
 # Django stuff:
 *.log
@@ -167,5 +169,8 @@ cython_debug/
 C:\Users\marcb\OneDrive\Desktop\Master\Sem3\AGI\exercisesheet03\upload\ex02\data
 
 exercisesheet03/upload/ex02/data
+
 *ipynb_checkpoints
 *ckpt
+
+*.7z
